@@ -16,6 +16,7 @@ class InteractiveElement:
     scrollable: bool
     checkable: bool
     checked: bool
+    password: bool
 
     @property
     def center(self) -> tuple[int, int]:
@@ -39,6 +40,7 @@ class InteractiveElement:
             "clickable": self.clickable,
             "focusable": self.focusable,
             "scrollable": self.scrollable,
+            "password": self.password,
         }
 
 
@@ -100,6 +102,7 @@ def parse_interactive_elements(xml_str: str) -> list[InteractiveElement]:
             scrollable=scrollable,
             checkable=node.get("checkable", "false") == "true",
             checked=node.get("checked", "false") == "true",
+            password=node.get("password", "false") == "true",
         ))
 
     # sort top-to-bottom, left-to-right

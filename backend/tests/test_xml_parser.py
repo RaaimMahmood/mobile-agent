@@ -61,3 +61,25 @@ def test_center_property():
     cx, cy = elem.center
     assert cx == (20 + 200) // 2
     assert cy == (100 + 200) // 2
+
+
+def test_password_attribute_parsed_true():
+    xml = """<hierarchy>
+        <node class="android.widget.EditText" resource-id="pwd" text=""
+              password="true" clickable="true" focusable="true"
+              bounds="[0,0][100,50]" />
+    </hierarchy>"""
+    elements = parse_interactive_elements(xml)
+    assert elements[0].password is True
+    assert elements[0].to_dict()["password"] is True
+
+
+def test_password_attribute_defaults_false():
+    xml = """<hierarchy>
+        <node class="android.widget.EditText" resource-id="username" text=""
+              clickable="true" focusable="true"
+              bounds="[0,0][100,50]" />
+    </hierarchy>"""
+    elements = parse_interactive_elements(xml)
+    assert elements[0].password is False
+    assert elements[0].to_dict()["password"] is False

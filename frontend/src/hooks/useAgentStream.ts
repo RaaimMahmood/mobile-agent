@@ -12,6 +12,7 @@ export function useAgentStream(sessionId: string | null) {
     setFailureReason,
     setPlan,
     setRoundNum,
+    setPendingConfirmation,
   } = useAgentStore()
 
   const wsRef = useRef<AgentWebSocket | null>(null)
@@ -42,6 +43,19 @@ export function useAgentStream(sessionId: string | null) {
         case 'error':
           setAgentStatus('error')
           break
+        case 'confirmation_required':
+          setPendingConfirmation(event)
+          break
+        case 'action_blocked':
+          appendLog({
+            type: 'action_event',
+            round: 0,
+            action: `blocked: ${event.action}`,
+            element_id: null,
+            thought: event.reason,
+            observation: '',
+          })
+          break
       }
     }
 
@@ -55,7 +69,7 @@ export function useAgentStream(sessionId: string | null) {
     }
     // Store setters are stable across renders (zustand), so this effect still
     // only re-runs when sessionId changes.
-  }, [sessionId, setScreenshot, setRoundNum, appendLog, appendKbDoc, setPlan, setAgentStatus, setTaskComplete, setFailureReason])
+  }, [sessionId, setScreenshot, setRoundNum, appendLog, appendKbDoc, setPlan, setAgentStatus, setTaskComplete, setFailureReason, setPendingConfirmation])
 
   const stop = () => wsRef.current?.send({ type: 'stop' })
   const pause = () => wsRef.current?.send({ type: 'pause' })

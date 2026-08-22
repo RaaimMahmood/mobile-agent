@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ActionEvent, KBUpdateEvent } from '../api/websocket'
+import type { ActionEvent, KBUpdateEvent, ConfirmationRequiredEvent } from '../api/websocket'
 import type { DeviceStatus, KBDoc } from '../api/client'
 
 export interface LogEntry {
@@ -47,6 +47,10 @@ interface AgentStore {
   kbDocs: KBDoc[]
   appendKbDoc: (doc: KBUpdateEvent['doc']) => void
   setKbDocs: (docs: KBDoc[]) => void
+
+  // Confirmation gate
+  pendingConfirmation: ConfirmationRequiredEvent | null
+  setPendingConfirmation: (e: ConfirmationRequiredEvent | null) => void
 
   // Reset for new session
   resetSession: () => void
@@ -121,6 +125,9 @@ export const useAgentStore = create<AgentStore>((set) => ({
     }),
   setKbDocs: (docs) => set({ kbDocs: docs }),
 
+  pendingConfirmation: null,
+  setPendingConfirmation: (e) => set({ pendingConfirmation: e }),
+
   resetSession: () =>
     set({
       sessionId: null,
@@ -133,5 +140,6 @@ export const useAgentStore = create<AgentStore>((set) => ({
       planSteps: [],
       currentStepIdx: 0,
       logEntries: [],
+      pendingConfirmation: null,
     }),
 }))

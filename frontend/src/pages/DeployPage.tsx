@@ -4,6 +4,7 @@ import { ChevronLeft, Square, CheckCircle2, Circle, ArrowRight, XCircle } from '
 import { clsx } from 'clsx'
 import { DeviceScreen } from '../components/DeviceScreen'
 import { ActionLog } from '../components/ActionLog'
+import { ConfirmationModal } from '../components/ConfirmationModal'
 import { RoundProgress } from '../components/RoundProgress'
 import { TaskInput } from '../components/TaskInput'
 import { StatusChip } from '../components/StatusChip'
@@ -43,6 +44,8 @@ export function DeployPage() {
     planSteps,
     currentStepIdx,
     logEntries,
+    pendingConfirmation,
+    setPendingConfirmation,
     setSessionId,
     resetSession,
   } = useAgentStore()
@@ -118,6 +121,13 @@ export function DeployPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 py-6 px-4">
+      {sessionId && pendingConfirmation && (
+        <ConfirmationModal
+          sessionId={sessionId}
+          event={pendingConfirmation}
+          onResolved={() => setPendingConfirmation(null)}
+        />
+      )}
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Link

@@ -6,11 +6,20 @@ import { StatusChip } from '../components/StatusChip'
 import { useAgentStore } from '../store/agentStore'
 import { useDevice } from '../hooks/useDevice'
 import { deviceApi, type HealthDetailed } from '../api/client'
+import { getApiKey, setApiKey } from '../api/apiKey'
 
 export function SetupPage() {
   const { deviceStatus } = useAgentStore()
   const [health, setHealth] = useState<HealthDetailed | null>(null)
+  const [apiKeyInput, setApiKeyInput] = useState(getApiKey() ?? '')
+  const [saved, setSaved] = useState(false)
   useDevice(4000)
+
+  function handleSaveApiKey() {
+    setApiKey(apiKeyInput.trim())
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1500)
+  }
 
   useEffect(() => {
     let mounted = true
@@ -97,6 +106,30 @@ export function SetupPage() {
               <span className="text-zinc-500">{v}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* API Key */}
+      <div className="border border-zinc-800 rounded-xl p-5 space-y-3">
+        <div className="text-sm font-medium text-zinc-200">API Key</div>
+        <p className="text-xs text-zinc-500">
+          Stored only in this browser's local storage — never baked into the app build.
+          Must match the backend's <code className="text-sky-400">API_KEY</code> in <code className="text-sky-400">.env</code>.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+            placeholder="Backend API key"
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 font-mono"
+          />
+          <button
+            onClick={handleSaveApiKey}
+            className="px-4 py-2 border border-zinc-700 hover:border-zinc-500 rounded-lg text-sm text-zinc-300"
+          >
+            {saved ? 'Saved' : 'Save'}
+          </button>
         </div>
       </div>
 

@@ -1,15 +1,15 @@
 import axios from 'axios'
+import { getApiKey } from './apiKey'
 
-// VITE_API_KEY is baked in at build time — acceptable for this project's
-// single-user local-dev model (the person running the frontend build is the
-// same person running the backend on their own machine), not a substitute
-// for real auth in a multi-user deployment.
 export const api = axios.create({
   baseURL: '/api/v1',
   timeout: 10_000,
-  headers: import.meta.env.VITE_API_KEY
-    ? { 'X-API-Key': import.meta.env.VITE_API_KEY }
-    : {},
+})
+
+api.interceptors.request.use((config) => {
+  const key = getApiKey()
+  if (key) config.headers['X-API-Key'] = key
+  return config
 })
 
 api.interceptors.response.use(
@@ -248,6 +248,8 @@ export const agentApi = {
     api.get<AgentStatus>(`/agent/${session_id}`).then((r) => r.data),
   stop: (session_id: string) =>
     api.delete<AgentStatus>(`/agent/${session_id}`).then((r) => r.data),
+  confirm: (session_id: string, approve: boolean) =>
+    api.post<AgentStatus>(`/agent/${session_id}/confirm`, { approve }).then((r) => r.data),
   listSessions: (limit?: number, offset?: number) =>
     api.get<SessionSummary[]>('/agent/sessions', { params: { limit, offset } }).then((r) => r.data),
   getSessionHistory: (session_id: string) =>

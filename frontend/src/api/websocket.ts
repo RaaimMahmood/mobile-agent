@@ -1,3 +1,5 @@
+import { getApiKey } from './apiKey'
+
 // ── WebSocket event types ──────────────────────────────────────────────────────
 
 export interface ScreenshotUpdateEvent {
@@ -45,6 +47,21 @@ export interface ErrorEvent {
   message: string
 }
 
+export interface ConfirmationRequiredEvent {
+  type: 'confirmation_required'
+  risk: 'medium' | 'high'
+  action: string
+  element_id: number | null
+  thought: string
+}
+
+export interface ActionBlockedEvent {
+  type: 'action_blocked'
+  risk: 'critical'
+  action: string
+  reason: string
+}
+
 export type AgentEvent =
   | ScreenshotUpdateEvent
   | ActionEvent
@@ -52,6 +69,8 @@ export type AgentEvent =
   | PlanReadyEvent
   | StatusChangeEvent
   | ErrorEvent
+  | ConfirmationRequiredEvent
+  | ActionBlockedEvent
 
 // ── WebSocket client ───────────────────────────────────────────────────────────
 
@@ -70,7 +89,7 @@ export class AgentWebSocket {
 
   connect(): void {
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-    const apiKey = import.meta.env.VITE_API_KEY as string | undefined
+    const apiKey = getApiKey()
     const tokenParam = apiKey ? `?token=${encodeURIComponent(apiKey)}` : ''
     const url = `${protocol}://${location.host}/ws/${this.sessionId}${tokenParam}`
     this.ws = new WebSocket(url)

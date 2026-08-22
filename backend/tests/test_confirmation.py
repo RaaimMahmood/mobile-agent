@@ -96,6 +96,81 @@ def test_medium_risk_action_rejected_skips_execution():
     assert proceed is False
 
 
+class _FakeDevice:
+    def __init__(self, xml: str):
+        self.xml = xml
+
+    async def pull_xml(self):
+        return self.xml
+
+
+_SAME_SCREEN_XML = """<hierarchy>
+    <node class="android.widget.EditText" resource-id="search" text=""
+          clickable="true" focusable="true" bounds="[0,0][100,50]" />
+</hierarchy>"""
+
+_DIFFERENT_SCREEN_XML = """<hierarchy>
+    <node class="android.widget.Button" resource-id="ok" text="OK"
+          clickable="true" focusable="true" bounds="[0,0][100,50]" />
+</hierarchy>"""
+
+
+def test_approved_action_executes_when_screen_is_unchanged():
+    state = _state(device=_FakeDevice(_SAME_SCREEN_XML))
+    decision = {"action": "text", "element_id": 1, "text_input": "hello"}
+
+    async def approve_after_delay():
+        await asyncio.sleep(0.05)
+        state.confirmation_result = True
+
+    async def run_both():
+        return await asyncio.gather(
+            gate_action(state, decision, [_elem(id=1, resource_id="search")]),
+            approve_after_delay(),
+        )
+
+    proceed, _ = asyncio.run(run_both())
+    assert proceed is True
+
+
+def test_approved_action_skipped_when_screen_changed_while_waiting():
+    state = _state(device=_FakeDevice(_DIFFERENT_SCREEN_XML))
+    decision = {"action": "text", "element_id": 1, "text_input": "hello"}
+
+    async def approve_after_delay():
+        await asyncio.sleep(0.05)
+        state.confirmation_result = True
+
+    async def run_both():
+        return await asyncio.gather(
+            gate_action(state, decision, [_elem(id=1, resource_id="search")]),
+            approve_after_delay(),
+        )
+
+    proceed, _ = asyncio.run(run_both())
+    assert proceed is False
+
+
+def test_no_device_skips_staleness_check():
+    # The stateless /agent/decide path has no device attached and never
+    # pauses in practice, but the check must not crash if it somehow did.
+    state = _state(device=None)
+    decision = {"action": "text", "element_id": 1, "text_input": "hello"}
+
+    async def approve_after_delay():
+        await asyncio.sleep(0.05)
+        state.confirmation_result = True
+
+    async def run_both():
+        return await asyncio.gather(
+            gate_action(state, decision, [_elem(id=1)]),
+            approve_after_delay(),
+        )
+
+    proceed, _ = asyncio.run(run_both())
+    assert proceed is True
+
+
 def test_stop_requested_while_waiting_breaks_out_without_hanging():
     state = _state()
     decision = {"action": "text", "element_id": 1, "text_input": "hello"}

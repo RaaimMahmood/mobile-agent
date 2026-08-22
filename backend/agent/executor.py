@@ -3,6 +3,7 @@ from ..perception.grid import overlay_grid
 from ..llm import call_vision_llm
 from ..llm.prompts import build_grid_prompt
 from ..security.credentials import CredentialNotFoundError
+from ..security.risk_policy import classify_action
 from .usage import record_usage
 
 
@@ -21,6 +22,9 @@ async def execute_action(
         can be billed to the session — without it that call burns tokens the
         usage limiter never sees.
     """
+    if classify_action(action, elements) == "critical":
+        return  # gate_action() should already have caught this; this is the backstop
+
     action_type = action.get("action", "").lower()
     elem_id = action.get("element_id")
     text_input = action.get("text_input")

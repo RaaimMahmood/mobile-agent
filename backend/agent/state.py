@@ -55,6 +55,12 @@ class AgentState:
     task_complete: bool = False
     failure_reason: Optional[str] = None
     errors: list[str] = field(default_factory=list)
+    # Set when a medium/high-risk action needs a human decision before it
+    # can execute; cleared back to None once resolve_confirmation() consumes
+    # it. Holds the full decision dict so /confirm's response and any audit
+    # log can show exactly what was approved or rejected.
+    pending_confirmation: Optional[dict] = None
+    confirmation_result: Optional[bool] = None
     tokens_used: int = 0
     estimated_cost_usd: float = 0.0
     llm_call_count: int = 0

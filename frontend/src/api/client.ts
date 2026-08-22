@@ -54,6 +54,7 @@ export interface AgentStatus {
   task_complete: boolean
   failure_reason: string | null
   errors: string[]
+  pending_confirmation?: Record<string, unknown> | null
 }
 
 export interface KBDoc {

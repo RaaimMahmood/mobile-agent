@@ -1,8 +1,12 @@
 import asyncio
+import logging
 
 from ..security.risk_policy import classify_action, RISK_TIERS
 
+logger = logging.getLogger(__name__)
+
 POLL_INTERVAL_SECONDS = 0.5
+CONFIRMATION_TIMEOUT_SECONDS = 300  # 5 minutes
 
 _NEEDS_CONFIRMATION = RISK_TIERS.index("medium")  # tiers >= this index pause
 
@@ -43,6 +47,37 @@ async def _screen_changed_since_pause(state, elements_at_pause: list[dict]) -> b
     return _elements_signature(live_elements) != _elements_signature(elements_at_pause)
 
 
+async def _handle_timeout(state, decision: dict, tier: str) -> None:
+    """No human responded within CONFIRMATION_TIMEOUT_SECONDS.
+
+    Treated as a rejection, plus: the whole run is stopped (not just this
+    action skipped) — an unattended confirmation almost certainly means
+    nobody is watching this session anymore, so continuing to burn the
+    device/LLM budget on more rounds that will just pause again is worse
+    than stopping. Setting stop_requested reuses the existing
+    _run_and_release cleanup path (backend/api/routers/agent.py) to release
+    the device and drop the session, rather than duplicating that logic here.
+    """
+    state.confirmation_result = False
+    state.stop_requested = True
+    state.failure_reason = f"Confirmation timed out after {CONFIRMATION_TIMEOUT_SECONDS}s — action rejected, run stopped."
+    await state.broadcast({
+        "type": "confirmation_timed_out",
+        "risk": tier,
+        "action": decision.get("action"),
+        "reason": state.failure_reason,
+    })
+    try:
+        from ..persistence import append_event
+        await append_event(
+            state.session_id, state.round_num,
+            {"type": "confirmation_timeout", "risk": tier, "action": decision},
+            None,
+        )
+    except Exception as e:
+        logger.warning("confirmation timeout: failed to persist audit event: %s", e)
+
+
 async def gate_action(state, decision: dict, elements: list[dict]) -> bool:
     """Classify `decision` and, if it's risky enough, block until the user
     approves or rejects it (or the run is stopped).
@@ -79,10 +114,15 @@ async def gate_action(state, decision: dict, elements: list[dict]) -> bool:
     })
 
     try:
+        waited = 0.0
         while state.confirmation_result is None:
             if state.stop_requested:
                 return False
+            if waited >= CONFIRMATION_TIMEOUT_SECONDS:
+                await _handle_timeout(state, decision, tier)
+                return False
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
+            waited += POLL_INTERVAL_SECONDS
         if not state.confirmation_result:
             return False
         if await _screen_changed_since_pause(state, elements):

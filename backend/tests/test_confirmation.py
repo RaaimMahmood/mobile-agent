@@ -1,6 +1,7 @@
 import asyncio
 
 from backend.agent.state import AgentState, RunConfig
+from backend.agent import confirmation
 from backend.agent.confirmation import gate_action
 
 
@@ -169,6 +170,30 @@ def test_no_device_skips_staleness_check():
 
     proceed, _ = asyncio.run(run_both())
     assert proceed is True
+
+
+def test_timeout_rejects_stops_run_and_notifies(monkeypatch):
+    monkeypatch.setattr(confirmation, "CONFIRMATION_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(confirmation, "POLL_INTERVAL_SECONDS", 0.02)
+
+    async def fake_append_event(session_id, round_num, action_dict, element_sig):
+        fake_append_event.calls.append((session_id, round_num, action_dict, element_sig))
+    fake_append_event.calls = []
+    monkeypatch.setattr("backend.persistence.append_event", fake_append_event)
+
+    state = _state(status="running")
+    recorder = _BroadcastRecorder()
+    state.ws_broadcast = recorder
+    decision = {"action": "text", "element_id": 1, "text_input": "hello"}
+
+    proceed = asyncio.run(gate_action(state, decision, [_elem(id=1)]))
+
+    assert proceed is False
+    assert state.stop_requested is True
+    assert state.failure_reason is not None
+    assert any(e["type"] == "confirmation_timed_out" for e in recorder.events)
+    assert len(fake_append_event.calls) == 1
+    assert fake_append_event.calls[0][2]["type"] == "confirmation_timeout"
 
 
 def test_stop_requested_while_waiting_breaks_out_without_hanging():

@@ -174,6 +174,11 @@ class AgentStatusResponse(BaseModel):
     estimated_cost_usd: float = 0.0
     llm_call_count: int = 0
     escalation_count: int = 0
+    pending_confirmation: Optional[dict] = None
+
+
+class ConfirmActionRequest(BaseModel):
+    approve: bool
 
 
 class SessionHistoryEvent(BaseModel):

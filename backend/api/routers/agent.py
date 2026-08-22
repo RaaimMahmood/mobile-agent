@@ -11,6 +11,7 @@ from ..schemas import (
     DecideRequest, DecideResponse, InterpretRequest, InterpretResponse,
     FanoutDeployRequest, FanoutDeployResponse, FanoutSessionResult,
     SessionResponse, AgentStatusResponse, SessionHistoryEvent,
+    ConfirmActionRequest,
 )
 from ..ws.manager import ws_manager
 from ...agent.loop import run_explore, run_deploy
@@ -404,6 +405,7 @@ async def get_status(session_id: str):
             estimated_cost_usd=db_row["estimated_cost_usd"],
             llm_call_count=db_row["llm_call_count"],
             escalation_count=db_row["escalation_count"],
+            pending_confirmation=None,
         )
     return AgentStatusResponse(
         session_id=session_id,
@@ -416,6 +418,7 @@ async def get_status(session_id: str):
         estimated_cost_usd=state.estimated_cost_usd,
         llm_call_count=state.llm_call_count,
         escalation_count=state.escalation_count,
+        pending_confirmation=state.pending_confirmation,
     )
 
 
@@ -431,6 +434,29 @@ async def get_session_history(session_id: str):
         )
         for e in events
     ]
+
+
+@router.post("/{session_id}/confirm", response_model=AgentStatusResponse)
+async def confirm_action(session_id: str, body: ConfirmActionRequest):
+    state = _sessions.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if state.pending_confirmation is None:
+        raise HTTPException(status_code=409, detail="No action is pending confirmation")
+    state.confirmation_result = body.approve
+    return AgentStatusResponse(
+        session_id=session_id,
+        status=state.status,
+        round_num=state.round_num,
+        task_complete=state.task_complete,
+        failure_reason=state.failure_reason,
+        errors=state.errors[-5:],
+        tokens_used=state.tokens_used,
+        estimated_cost_usd=state.estimated_cost_usd,
+        llm_call_count=state.llm_call_count,
+        escalation_count=state.escalation_count,
+        pending_confirmation=state.pending_confirmation,
+    )
 
 
 @router.delete("/{session_id}", response_model=AgentStatusResponse)

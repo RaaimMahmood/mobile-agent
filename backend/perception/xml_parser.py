@@ -16,7 +16,7 @@ class InteractiveElement:
     scrollable: bool
     checkable: bool
     checked: bool
-    password: bool
+    password: bool = False
 
     @property
     def center(self) -> tuple[int, int]:

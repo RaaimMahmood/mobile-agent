@@ -10,6 +10,7 @@ from ..graph.neo4j_client import screen_signature
 from ..device.app_registry import resolve_package
 from .planner import run_planner
 from .executor import execute_action
+from .confirmation import gate_action
 from .reflector import run_reflector
 from ..llm.pricing import estimate_cost_usd
 from ..persistence import create_session, update_session, append_event
@@ -164,8 +165,9 @@ async def run_explore(state: AgentState) -> None:
                 state.task_complete = True
                 break
 
-            # ── 9. Execute action ─────────────────────────────────────────────
-            await execute_action(state.device, decision, state.elements, state.credentials, state=state)
+            # ── 9. Risk-gate then execute ──────────────────────────────────────
+            if await gate_action(state, decision, state.elements):
+                await execute_action(state.device, decision, state.elements, state.credentials, state=state)
 
             # ── 10. Wait for UI to settle ─────────────────────────────────────
             await state.device.wait_idle()
@@ -357,8 +359,9 @@ async def run_deploy(state: AgentState) -> None:
             if any(w in thought for w in ["cannot", "impossible", "not possible", "unable"]):
                 state.failure_reason = decision.get("thought", "Task marked impossible by agent")
 
-            # ── 6–7: Execute + wait ───────────────────────────────────────────
-            await execute_action(state.device, decision, state.elements, state.credentials, state=state)
+            # ── 6–7: Risk-gate, execute, wait ─────────────────────────────────
+            if await gate_action(state, decision, state.elements):
+                await execute_action(state.device, decision, state.elements, state.credentials, state=state)
             await state.device.wait_idle()
 
             # ── 8. Advance sub-step index if current step likely complete ─────

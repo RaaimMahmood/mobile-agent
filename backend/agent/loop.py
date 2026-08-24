@@ -8,6 +8,7 @@ from ..llm.prompts import build_explore_prompt, build_deploy_prompt, build_progr
 from .state import AgentState
 from ..graph.neo4j_client import screen_signature
 from ..device.app_registry import resolve_package
+from ..security.app_policy import is_app_allowed
 from .planner import run_planner
 from .executor import execute_action
 from .confirmation import gate_action
@@ -57,6 +58,30 @@ async def _launch_target_app(state: AgentState) -> None:
         logger.warning("launch_app failed for %s (%s): %s", state.app_name, package, e)
 
 
+async def _reject_if_app_not_allowed(state: AgentState) -> bool:
+    """True if the run was rejected and the caller should stop before ever
+    launching the app or entering the round loop. ALLOWED_APPS is unset by
+    default (is_app_allowed() then allows everything) — this is an opt-in
+    gate, not a default restriction, matching the fail-open posture the rest
+    of this project uses for optional policy.
+    """
+    if is_app_allowed(state.app_name):
+        return False
+    state.failure_reason = f"App '{state.app_name}' is not in the allowed apps list"
+    state.status = "done"
+    try:
+        await update_session(state.session_id, status="done", failure_reason=state.failure_reason)
+    except Exception as e:
+        logger.warning("persistence update_session failed: %s", e)
+    await state.broadcast({
+        "type": "status_change",
+        "status": "done",
+        "task_complete": False,
+        "failure_reason": state.failure_reason,
+    })
+    return True
+
+
 async def run_explore(state: AgentState) -> None:
     """Explore phase: systematically interact with all UI elements and build KB."""
     state.status = "running"
@@ -68,6 +93,8 @@ async def run_explore(state: AgentState) -> None:
         )
     except Exception as e:
         logger.warning("persistence create_session failed: %s", e)
+    if await _reject_if_app_not_allowed(state):
+        return
     from ..observability.langfuse_client import start_session_trace, end_session_trace
     trace = start_session_trace(state.session_id, mode="explore", app_name=state.app_name, task=state.task)
 
@@ -248,6 +275,8 @@ async def run_deploy(state: AgentState) -> None:
         )
     except Exception as e:
         logger.warning("persistence create_session failed: %s", e)
+    if await _reject_if_app_not_allowed(state):
+        return
     from ..observability.langfuse_client import start_session_trace, end_session_trace
     trace = start_session_trace(state.session_id, mode="deploy", app_name=state.app_name, task=state.task)
 

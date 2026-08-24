@@ -21,6 +21,7 @@ _KNOWN_PACKAGES = {
     "play store": "com.android.vending",
     "calendar": "com.google.android.calendar",
     "photos": "com.google.android.apps.photos",
+    "claude": "com.anthropic.claude",
 }
 
 

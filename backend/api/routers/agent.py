@@ -24,6 +24,7 @@ from ...app_cards.loader import AppCardProvider
 from ...security.credentials import CredentialManager
 from ...graph.neo4j_client import NavigationGraph
 from ...persistence import get_session, get_session_events, list_sessions
+from ...observability.langfuse_client import start_session_trace, end_session_trace
 
 logger = logging.getLogger(__name__)
 
@@ -190,9 +191,20 @@ async def start_deploy(body: DeployRequest, request: Request):
 
 @router.post("/chat", response_model=ChatResponse)
 async def start_chat(body: ChatRequest, request: Request):
+    # Generated here (rather than after the intent call, as before) so the
+    # intent-parse trace and the deploy-run trace loop.py creates later
+    # share the same trace_id (seeded from session_id) — two spans under one
+    # trace in Langfuse instead of the intent call being invisible.
+    session_id = str(uuid.uuid4())
+    intent_trace = start_session_trace(
+        session_id, mode="chat_intent", app_name="(pending)", task=body.message
+    )
     try:
-        result = await call_text_llm(body.provider, build_chat_intent_prompt(body.message))
+        result = await call_text_llm(
+            body.provider, build_chat_intent_prompt(body.message), trace=intent_trace
+        )
     except Exception:
+        end_session_trace(intent_trace, status="error", task_complete=False, round_num=0)
         raise HTTPException(status_code=422, detail=_INTENT_FAIL_DETAIL)
     app_name = result.get("app_name")
     task = result.get("task")
@@ -201,9 +213,10 @@ async def start_chat(body: ChatRequest, request: Request):
         or not isinstance(task, str) or not task.strip()
     )
     if invalid:
+        end_session_trace(intent_trace, status="error", task_complete=False, round_num=0)
         raise HTTPException(status_code=422, detail=_INTENT_FAIL_DETAIL)
+    end_session_trace(intent_trace, status="done", task_complete=True, round_num=0)
 
-    session_id = str(uuid.uuid4())
     config = RunConfig(
         app_name=app_name.strip(),
         task=task.strip(),
@@ -239,10 +252,19 @@ async def interpret_message(body: InterpretRequest):
 
     Must stay registered above /{session_id}.
     """
+    # No downstream session exists for this path (the on-device caller drives
+    # itself) — this trace is standalone, one per call, not grouped with
+    # anything else.
+    trace = start_session_trace(
+        str(uuid.uuid4()), mode="interpret", app_name="(pending)", task=body.message
+    )
     try:
-        result = await call_text_llm(body.provider, build_chat_intent_prompt(body.message))
+        result = await call_text_llm(
+            body.provider, build_chat_intent_prompt(body.message), trace=trace
+        )
     except Exception as e:
         logger.warning("interpret: LLM call failed: %s", e)
+        end_session_trace(trace, status="error", task_complete=False, round_num=0)
         raise HTTPException(status_code=502, detail="LLM call failed")
 
     app_name = result.get("app_name")
@@ -251,8 +273,10 @@ async def interpret_message(body: InterpretRequest):
         not isinstance(app_name, str) or not app_name.strip()
         or not isinstance(task, str) or not task.strip()
     ):
+        end_session_trace(trace, status="error", task_complete=False, round_num=0)
         raise HTTPException(status_code=422, detail=_INTENT_FAIL_DETAIL)
 
+    end_session_trace(trace, status="done", task_complete=True, round_num=0)
     return InterpretResponse(app_name=app_name.strip(), task=task.strip())
 
 
@@ -295,15 +319,25 @@ async def decide_next_action(body: DecideRequest):
     # empty KB ("reason from screenshot directly").
     prompt = build_deploy_prompt(state, elements, docs_context="")
 
+    # No continuity id exists across a phone's own decide-loop rounds
+    # (DecideRequest carries no session id), so each call gets its own
+    # one-off trace rather than either being invisible or all calls from
+    # every phone collapsing into a single ever-growing trace.
+    trace = start_session_trace(
+        str(uuid.uuid4()), mode="decide", app_name=body.app_name, task=body.task
+    )
     try:
-        decision = await call_text_llm(body.provider, prompt)
+        decision = await call_text_llm(body.provider, prompt, trace=trace)
     except Exception as e:
         logger.warning("decide: LLM call failed: %s", e)
+        end_session_trace(trace, status="error", task_complete=False, round_num=body.round_num)
         raise HTTPException(status_code=502, detail="LLM call failed")
 
     action = decision.get("action")
     if not isinstance(action, str) or not action.strip():
+        end_session_trace(trace, status="error", task_complete=False, round_num=body.round_num)
         raise HTTPException(status_code=502, detail="LLM returned no action")
+    end_session_trace(trace, status="done", task_complete=False, round_num=body.round_num)
 
     usage = decision.get("_usage", {}) or {}
     return DecideResponse(

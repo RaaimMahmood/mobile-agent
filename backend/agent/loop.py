@@ -98,6 +98,7 @@ async def run_explore(state: AgentState) -> None:
         return
     from ..observability.langfuse_client import start_session_trace, end_session_trace
     trace = start_session_trace(state.session_id, mode="explore", app_name=state.app_name, task=state.task)
+    state.trace = trace
 
     await _launch_target_app(state)
 
@@ -280,6 +281,7 @@ async def run_deploy(state: AgentState) -> None:
         return
     from ..observability.langfuse_client import start_session_trace, end_session_trace
     trace = start_session_trace(state.session_id, mode="deploy", app_name=state.app_name, task=state.task)
+    state.trace = trace
 
     await _launch_target_app(state)
 

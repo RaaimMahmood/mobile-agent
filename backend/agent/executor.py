@@ -93,7 +93,8 @@ async def execute_action(
         # grid_cell may already be set if LLM returned it; otherwise ask again
         if not grid_cell:
             grid_resp = await call_vision_llm(
-                action.get("_provider", "gemini"), grid_b64, prompt
+                action.get("_provider", "gemini"), grid_b64, prompt,
+                trace=state.trace if state is not None else None,
             )
             if state is not None:
                 record_usage(state, grid_resp)

@@ -34,7 +34,7 @@ async def run_reflector(
 
     try:
         prompt = build_reflect_prompt(state.app_name, elem, action_type)
-        result = await call_dual_vision_llm(state.provider, before_b64, after_b64, prompt)
+        result = await call_dual_vision_llm(state.provider, before_b64, after_b64, prompt, trace=state.trace)
         record_usage(state, result)
     except Exception as e:
         state.errors.append(f"Reflector failed for element {elem_id}: {sanitize_error(e)}")

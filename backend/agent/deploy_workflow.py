@@ -104,6 +104,9 @@ class DeployWorkflow(Workflow):
         state.status = "running"
         await state.broadcast({"type": "status_change", "status": "running", "mode": "deploy"})
 
+        from ..observability.langfuse_client import start_session_trace
+        state.trace = start_session_trace(state.session_id, mode="deploy_workflow", app_name=state.app_name, task=state.task)
+
         await _launch_target_app(state)
 
         state.sub_steps = await run_planner(state)
@@ -135,6 +138,8 @@ class DeployWorkflow(Workflow):
         except Exception as e:
             state.status = "error"
             state.errors.append(sanitize_error(e))
+            from ..observability.langfuse_client import end_session_trace
+            end_session_trace(state.trace, status="error", task_complete=state.task_complete, round_num=state.round_num)
             await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
@@ -172,6 +177,8 @@ class DeployWorkflow(Workflow):
         except Exception as e:
             state.status = "error"
             state.errors.append(sanitize_error(e))
+            from ..observability.langfuse_client import end_session_trace
+            end_session_trace(state.trace, status="error", task_complete=state.task_complete, round_num=state.round_num)
             await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
@@ -205,6 +212,8 @@ class DeployWorkflow(Workflow):
         except Exception as e:
             state.status = "error"
             state.errors.append(sanitize_error(e))
+            from ..observability.langfuse_client import end_session_trace
+            end_session_trace(state.trace, status="error", task_complete=state.task_complete, round_num=state.round_num)
             await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
@@ -222,7 +231,7 @@ class DeployWorkflow(Workflow):
         try:
             prompt = build_deploy_prompt(state, ev.elements, ev.docs_context)
             try:
-                decision = await call_vision_llm(state.provider, ev.screenshot_b64, prompt)
+                decision = await call_vision_llm(state.provider, ev.screenshot_b64, prompt, trace=state.trace)
             except Exception as e:
                 state.errors.append(f"Round {state.round_num} LLM error: {sanitize_error(e)}")
                 state.round_num += 1
@@ -282,6 +291,8 @@ class DeployWorkflow(Workflow):
         except Exception as e:
             state.status = "error"
             state.errors.append(sanitize_error(e))
+            from ..observability.langfuse_client import end_session_trace
+            end_session_trace(state.trace, status="error", task_complete=state.task_complete, round_num=state.round_num)
             await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
@@ -316,6 +327,8 @@ class DeployWorkflow(Workflow):
         except Exception as e:
             state.status = "error"
             state.errors.append(sanitize_error(e))
+            from ..observability.langfuse_client import end_session_trace
+            end_session_trace(state.trace, status="error", task_complete=state.task_complete, round_num=state.round_num)
             await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
@@ -342,6 +355,7 @@ class DeployWorkflow(Workflow):
                     prog = await call_text_llm(
                         state.provider,
                         build_text_progress_prompt(state.task, fresh_elements, state.action_history),
+                        trace=state.trace,
                     )
                     prog_usage = prog.pop("_usage", {})
                     state.llm_call_count += 1
@@ -359,6 +373,7 @@ class DeployWorkflow(Workflow):
                             state.provider,
                             progress_b64,
                             build_progress_prompt(state.task),
+                            trace=state.trace,
                         )
                         prog_usage = prog.pop("_usage", {})
                         state.llm_call_count += 1
@@ -400,6 +415,8 @@ class DeployWorkflow(Workflow):
         except Exception as e:
             state.status = "error"
             state.errors.append(sanitize_error(e))
+            from ..observability.langfuse_client import end_session_trace
+            end_session_trace(state.trace, status="error", task_complete=state.task_complete, round_num=state.round_num)
             await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
@@ -415,6 +432,8 @@ class DeployWorkflow(Workflow):
 async def _finish_deploy(state: AgentState) -> StopEvent:
     """Set terminal status, broadcast, and return a StopEvent."""
     state.status = "done"
+    from ..observability.langfuse_client import end_session_trace
+    end_session_trace(state.trace, status="done", task_complete=state.task_complete, round_num=state.round_num)
     await state.broadcast({
         "type": "status_change",
         "status": "done",

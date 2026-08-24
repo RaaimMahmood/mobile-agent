@@ -27,6 +27,12 @@ class AgentState:
     app_card: Optional[str] = None    # static per-app guidance from app_cards.AppCardProvider, or None
     nav_graph: Any = None             # graph.neo4j_client.NavigationGraph — records screen transitions during Explore
     ws_broadcast: Optional[Callable[..., Coroutine]] = None
+    # observability.langfuse_client trace/span for this session, or None if
+    # Langfuse is disabled/unconfigured. Stored on state (rather than
+    # threaded through every function signature) so any code holding a
+    # state reference — planner, reflector, executor's grid fallback — can
+    # log its LLM calls without a separate trace parameter everywhere.
+    trace: Any = None
 
     # per-round (overwritten each round)
     round_num: int = 0

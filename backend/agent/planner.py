@@ -12,7 +12,7 @@ async def run_planner(state: AgentState) -> list[str]:
     """
     try:
         prompt = build_planner_prompt(state.task, state.app_name)
-        result = await call_text_llm(state.provider, prompt)
+        result = await call_text_llm(state.provider, prompt, trace=state.trace)
         record_usage(state, result)
         steps = result.get("steps", [])
         if steps and isinstance(steps, list):

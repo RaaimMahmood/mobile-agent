@@ -70,7 +70,7 @@ def test_planner_records_its_usage():
     state = _state()
     captured = {}
 
-    async def fake_call(provider, prompt):
+    async def fake_call(provider, prompt, trace=None):
         captured["called"] = True
         return _result()
 

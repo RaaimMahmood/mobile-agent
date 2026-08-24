@@ -1,5 +1,6 @@
 from ..llm import call_text_llm
 from ..llm.prompts import build_planner_prompt
+from ..security.error_sanitizer import sanitize_error
 from .state import AgentState
 from .usage import record_usage
 
@@ -17,6 +18,6 @@ async def run_planner(state: AgentState) -> list[str]:
         if steps and isinstance(steps, list):
             return [str(s) for s in steps]
     except Exception as e:
-        state.errors.append(f"Planner failed: {e}")
+        state.errors.append(f"Planner failed: {sanitize_error(e)}")
 
     return [state.task]

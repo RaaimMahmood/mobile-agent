@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,6 +10,7 @@ load_dotenv()
 from backend.agent.state import AgentState, RunConfig  # noqa: E402
 from backend.llm.prompts import build_deploy_prompt  # noqa: E402
 from backend.llm.vision import call_text_llm  # noqa: E402
+from backend.security.error_sanitizer import sanitize_error  # noqa: E402
 
 from .scenarios import SCENARIOS  # noqa: E402
 
@@ -71,13 +71,6 @@ def _score(decision: dict, scenario: dict) -> dict:
     }
 
 
-def _sanitize_error(exc: Exception) -> str:
-    """Exception text can embed URLs whose query strings carry API keys
-    (e.g. gemini's ?key=...); strip query strings before recording it."""
-    text = f"{type(exc).__name__}: {exc}"
-    return re.sub(r"\?[^\s'\"]+", "", text)
-
-
 async def _run_case(provider: str, scenario: dict) -> dict:
     state = _make_state(scenario)
     prompt = build_deploy_prompt(state, scenario["elements"], docs_context="")
@@ -98,7 +91,7 @@ async def _run_case(provider: str, scenario: dict) -> dict:
         result["action"] = decision.get("action")
         result["element_id"] = decision.get("element_id")
     except Exception as exc:
-        result["error"] = _sanitize_error(exc)
+        result["error"] = sanitize_error(exc)
     return result
 
 

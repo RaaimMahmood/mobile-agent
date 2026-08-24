@@ -9,6 +9,7 @@ from .state import AgentState
 from ..graph.neo4j_client import screen_signature
 from ..device.app_registry import resolve_package
 from ..security.app_policy import is_app_allowed
+from ..security.error_sanitizer import sanitize_error
 from .planner import run_planner
 from .executor import execute_action
 from .confirmation import gate_action
@@ -158,7 +159,7 @@ async def run_explore(state: AgentState) -> None:
             try:
                 decision = await call_vision_llm(state.provider, annotated_b64, prompt, trace=trace)
             except Exception as e:
-                state.errors.append(f"Round {state.round_num} LLM error: {e}")
+                state.errors.append(f"Round {state.round_num} LLM error: {sanitize_error(e)}")
                 state.round_num += 1
                 continue
 
@@ -241,8 +242,8 @@ async def run_explore(state: AgentState) -> None:
 
     except Exception as e:
         state.status = "error"
-        state.errors.append(str(e))
-        await state.broadcast({"type": "error", "message": str(e)})
+        state.errors.append(sanitize_error(e))
+        await state.broadcast({"type": "error", "message": sanitize_error(e)})
         try:
             await update_session(state.session_id, **_session_fields(state, "error"))
         except Exception as e2:
@@ -352,7 +353,7 @@ async def run_deploy(state: AgentState) -> None:
                 else:
                     decision = await call_vision_llm(state.provider, annotated_b64, prompt, trace=trace)
             except Exception as e:
-                state.errors.append(f"Round {state.round_num} LLM error: {e}")
+                state.errors.append(f"Round {state.round_num} LLM error: {sanitize_error(e)}")
                 state.round_num += 1
                 continue
 
@@ -447,8 +448,8 @@ async def run_deploy(state: AgentState) -> None:
 
     except Exception as e:
         state.status = "error"
-        state.errors.append(str(e))
-        await state.broadcast({"type": "error", "message": str(e)})
+        state.errors.append(sanitize_error(e))
+        await state.broadcast({"type": "error", "message": sanitize_error(e)})
         try:
             await update_session(state.session_id, **_session_fields(state, "error"))
         except Exception as e2:

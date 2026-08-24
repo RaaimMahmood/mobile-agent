@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from ..knowledge_base.store import ElementDoc
 from ..llm import call_dual_vision_llm
 from ..llm.prompts import build_reflect_prompt
+from ..security.error_sanitizer import sanitize_error
 from .state import AgentState
 from .usage import record_usage
 
@@ -36,7 +37,7 @@ async def run_reflector(
         result = await call_dual_vision_llm(state.provider, before_b64, after_b64, prompt)
         record_usage(state, result)
     except Exception as e:
-        state.errors.append(f"Reflector failed for element {elem_id}: {e}")
+        state.errors.append(f"Reflector failed for element {elem_id}: {sanitize_error(e)}")
         return None
 
     doc_id = f"{state.app_name}::{elem.get('resource_id','')}::{elem.get('class_name','')}"

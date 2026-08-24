@@ -28,6 +28,7 @@ from .state import AgentState
 from .planner import run_planner
 from .executor import execute_action
 from .loop import _launch_target_app
+from ..security.error_sanitizer import sanitize_error
 
 
 # ---------------------------------------------------------------------------
@@ -133,11 +134,11 @@ class DeployWorkflow(Workflow):
 
         except Exception as e:
             state.status = "error"
-            state.errors.append(str(e))
-            await state.broadcast({"type": "error", "message": str(e)})
+            state.errors.append(sanitize_error(e))
+            await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "task_complete": state.task_complete,
             })
 
@@ -170,11 +171,11 @@ class DeployWorkflow(Workflow):
 
         except Exception as e:
             state.status = "error"
-            state.errors.append(str(e))
-            await state.broadcast({"type": "error", "message": str(e)})
+            state.errors.append(sanitize_error(e))
+            await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "task_complete": state.task_complete,
             })
 
@@ -203,11 +204,11 @@ class DeployWorkflow(Workflow):
 
         except Exception as e:
             state.status = "error"
-            state.errors.append(str(e))
-            await state.broadcast({"type": "error", "message": str(e)})
+            state.errors.append(sanitize_error(e))
+            await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "task_complete": state.task_complete,
             })
 
@@ -223,7 +224,7 @@ class DeployWorkflow(Workflow):
             try:
                 decision = await call_vision_llm(state.provider, ev.screenshot_b64, prompt)
             except Exception as e:
-                state.errors.append(f"Round {state.round_num} LLM error: {e}")
+                state.errors.append(f"Round {state.round_num} LLM error: {sanitize_error(e)}")
                 state.round_num += 1
                 return RoundStarted(round_num=state.round_num)
 
@@ -280,11 +281,11 @@ class DeployWorkflow(Workflow):
 
         except Exception as e:
             state.status = "error"
-            state.errors.append(str(e))
-            await state.broadcast({"type": "error", "message": str(e)})
+            state.errors.append(sanitize_error(e))
+            await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "task_complete": state.task_complete,
             })
 
@@ -314,11 +315,11 @@ class DeployWorkflow(Workflow):
 
         except Exception as e:
             state.status = "error"
-            state.errors.append(str(e))
-            await state.broadcast({"type": "error", "message": str(e)})
+            state.errors.append(sanitize_error(e))
+            await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "task_complete": state.task_complete,
             })
 
@@ -377,11 +378,11 @@ class DeployWorkflow(Workflow):
 
         except Exception as e:
             state.status = "error"
-            state.errors.append(str(e))
-            await state.broadcast({"type": "error", "message": str(e)})
+            state.errors.append(sanitize_error(e))
+            await state.broadcast({"type": "error", "message": sanitize_error(e)})
             return StopEvent(result={
                 "status": "error",
-                "error": str(e),
+                "error": sanitize_error(e),
                 "task_complete": state.task_complete,
             })
 

@@ -59,3 +59,32 @@ def test_unknown_element_id_falls_back_to_action_type_default():
 
 def test_risk_tiers_are_ordered_low_to_critical():
     assert RISK_TIERS == ("low", "medium", "high", "critical")
+
+
+def test_unlabeled_tap_in_bottom_right_hotzone_is_medium():
+    # A screen-wide element establishes the "screen size" the heuristic
+    # infers from bounds, plus an icon-only FAB in the bottom-right corner.
+    elements = [
+        _elem(id=1, bounds=[0, 0, 1080, 2280], resource_id="root", clickable=False),
+        _elem(id=2, bounds=[950, 2100, 1050, 2200], text="", content_desc=""),
+    ]
+    action = {"action": "tap", "element_id": 2}
+    assert classify_action(action, elements) == "medium"
+
+
+def test_unlabeled_tap_elsewhere_on_screen_stays_low():
+    elements = [
+        _elem(id=1, bounds=[0, 0, 1080, 2280], resource_id="root", clickable=False),
+        _elem(id=2, bounds=[20, 20, 120, 120], text="", content_desc=""),
+    ]
+    action = {"action": "tap", "element_id": 2}
+    assert classify_action(action, elements) == "low"
+
+
+def test_labeled_tap_in_bottom_right_hotzone_stays_low():
+    elements = [
+        _elem(id=1, bounds=[0, 0, 1080, 2280], resource_id="root", clickable=False),
+        _elem(id=2, bounds=[950, 2100, 1050, 2200], text="Home"),
+    ]
+    action = {"action": "tap", "element_id": 2}
+    assert classify_action(action, elements) == "low"

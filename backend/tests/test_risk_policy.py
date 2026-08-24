@@ -18,7 +18,8 @@ def test_tap_on_ordinary_element_is_low():
 
 
 def test_back_and_swipe_and_finish_are_low():
-    for action in [{"action": "back"}, {"action": "swipe", "direction": "up"}, {"action": "finish"}]:
+    actions = [{"action": "back"}, {"action": "swipe", "direction": "up"}, {"action": "finish"}]
+    for action in actions:
         assert classify_action(action, []) == "low"
 
 

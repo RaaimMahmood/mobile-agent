@@ -232,6 +232,35 @@ def build_deploy_prompt(state: "AgentState", elements: list, docs_context: str, 
 
 # ── Progress check prompt ──────────────────────────────────────────────────────
 
+def build_text_progress_prompt(task: str, elements: list, action_history: list) -> str:
+    """Text-only progress check — reads the current element list and recent
+    action history instead of a screenshot. Cheaper than build_progress_prompt
+    (no vision call), used as the first pass; the caller falls back to the
+    vision version only when this one reports confident=false.
+    """
+    recent = action_history[-5:]
+    history_txt = "\n".join(
+        f"- {a['action'].get('action', '?')}"
+        + (f" on element {a['action'].get('element_id')}" if a['action'].get('element_id') is not None else "")
+        + (f" (thought: {a['action'].get('thought', '')[:80]})" if a['action'].get('thought') else "")
+        for a in recent
+    ) or "(no actions taken yet)"
+
+    return (
+        f"Task: {task}\n\n"
+        f"Recent actions taken:\n{history_txt}\n\n"
+        f"Current screen elements:\n{_elements_txt(elements)}\n\n"
+        f"Based on the element list and action history alone (no screenshot), has the task "
+        f"been completed? Be strict: if the task specifies exact content (a search query, a "
+        f"name, a topic), only report complete if that exact content is visible in the element "
+        f"list. If you cannot tell from the element list alone — e.g. the confirmation would "
+        f"only be visible visually (an image, a color, a layout state text can't capture) — set "
+        f"confident to false rather than guessing.\n\n"
+        f'Respond ONLY with valid JSON: {{"complete": true|false, "confident": true|false, '
+        f'"progress": "brief description of what the element list shows"}}'
+    )
+
+
 def build_progress_prompt(task: str) -> str:
     return (
         f"Look at this screenshot. Has the following task been completed?\n\n"

@@ -21,8 +21,8 @@ from workflows.context import Context
 from workflows.events import Event, StartEvent, StopEvent
 
 from ..perception import annotate_screenshot, parse_interactive_elements
-from ..llm import call_vision_llm
-from ..llm.prompts import build_deploy_prompt, build_progress_prompt
+from ..llm import call_vision_llm, call_text_llm
+from ..llm.prompts import build_deploy_prompt, build_progress_prompt, build_text_progress_prompt
 from ..llm.pricing import estimate_cost_usd
 from .state import AgentState
 from .planner import run_planner
@@ -332,13 +332,16 @@ class DeployWorkflow(Workflow):
 
         try:
             if state.round_num > 0 and state.round_num % 5 == 0:
-                progress_png = await state.device.screenshot()
-                progress_b64 = base64.b64encode(progress_png).decode()
                 try:
-                    prog = await call_vision_llm(
+                    # Text-first: cheap XML pull (fresh — reflects the action
+                    # that just executed, unlike ev.elements which is
+                    # pre-action) + text LLM call. Only escalates to a real
+                    # screenshot + vision call when the text pass can't tell.
+                    fresh_xml = await state.device.pull_xml()
+                    fresh_elements = [e.to_dict() for e in parse_interactive_elements(fresh_xml)]
+                    prog = await call_text_llm(
                         state.provider,
-                        progress_b64,
-                        build_progress_prompt(state.task),
+                        build_text_progress_prompt(state.task, fresh_elements, state.action_history),
                     )
                     prog_usage = prog.pop("_usage", {})
                     state.llm_call_count += 1
@@ -348,6 +351,24 @@ class DeployWorkflow(Workflow):
                         prog_usage.get("prompt_tokens", 0),
                         prog_usage.get("completion_tokens", 0),
                     )
+
+                    if not prog.get("confident", False):
+                        progress_png = await state.device.screenshot()
+                        progress_b64 = base64.b64encode(progress_png).decode()
+                        prog = await call_vision_llm(
+                            state.provider,
+                            progress_b64,
+                            build_progress_prompt(state.task),
+                        )
+                        prog_usage = prog.pop("_usage", {})
+                        state.llm_call_count += 1
+                        state.tokens_used += prog_usage.get("total_tokens", 0)
+                        state.estimated_cost_usd += estimate_cost_usd(
+                            state.provider,
+                            prog_usage.get("prompt_tokens", 0),
+                            prog_usage.get("completion_tokens", 0),
+                        )
+
                     if prog.get("complete"):
                         state.task_complete = True
                         await state.broadcast({

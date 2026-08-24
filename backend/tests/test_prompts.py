@@ -14,6 +14,7 @@ from backend.llm.prompts import (
     build_planner_prompt,
     build_progress_prompt,
     build_reflect_prompt,
+    build_text_progress_prompt,
 )
 
 ELEMENTS = [
@@ -208,6 +209,32 @@ def test_progress_prompt():
     prompt = build_progress_prompt("search for cats")
     assert "Task: search for cats" in prompt
     assert "complete" in prompt
+
+
+def test_text_progress_prompt_contains_task_elements_and_history():
+    history = [
+        {"action": {"action": "text", "element_id": 3, "thought": "typed the query"}},
+        {"action": {"action": "tap", "element_id": 1}},
+    ]
+    prompt = build_text_progress_prompt("search for cats", ELEMENTS, history)
+    assert "Task: search for cats" in prompt
+    assert "confident" in prompt
+    assert "typed the query" in prompt
+    assert "tap on element 1" in prompt
+
+
+def test_text_progress_prompt_empty_history_and_elements():
+    prompt = build_text_progress_prompt("search for cats", [], [])
+    assert "(no actions taken yet)" in prompt
+    assert "(no interactive elements detected)" in prompt
+
+
+def test_text_progress_prompt_caps_history_at_five():
+    history = [{"action": {"action": "tap", "element_id": i}} for i in range(10)]
+    prompt = build_text_progress_prompt("t", [], history)
+    # only the last 5 should appear — element 9 (last) present, element 0 (10th-from-last) absent
+    assert "element 9" in prompt
+    assert "element 0" not in prompt
 
 
 def test_grid_prompt():

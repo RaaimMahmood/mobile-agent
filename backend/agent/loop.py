@@ -4,7 +4,7 @@ import logging
 
 from ..perception import parse_interactive_elements, annotate_screenshot
 from ..llm import call_vision_llm, call_text_llm
-from ..llm.prompts import build_explore_prompt, build_deploy_prompt, build_progress_prompt
+from ..llm.prompts import build_explore_prompt, build_deploy_prompt, build_progress_prompt, build_text_progress_prompt
 from .state import AgentState
 from ..graph.neo4j_client import screen_signature
 from ..device.app_registry import resolve_package
@@ -401,20 +401,44 @@ async def run_deploy(state: AgentState) -> None:
             )
 
             # ── 9. Progress check every 5 rounds ─────────────────────────────
+            # Text-first: reads the element list + action history, no
+            # screenshot. Only escalates to a vision call when the text pass
+            # reports it can't tell (confident=false) — most progress checks
+            # ("did the search box end up with this exact text") are fully
+            # answerable from the element list alone, so this skips a vision
+            # call on every round the text check is confident about.
             if state.round_num > 0 and state.round_num % 5 == 0:
-                progress_png = await state.device.screenshot()
-                progress_b64 = base64.b64encode(progress_png).decode()
                 try:
-                    prog = await call_vision_llm(
+                    # state.elements is from this round's capture, before the
+                    # action just executed — a fresh XML pull (cheap: no
+                    # image, no LLM call) is needed so the check reflects
+                    # what actually happened, not the pre-action screen.
+                    fresh_xml = await state.device.pull_xml()
+                    fresh_elements = [e.to_dict() for e in parse_interactive_elements(fresh_xml)]
+                    prog = await call_text_llm(
                         state.provider,
-                        progress_b64,
-                        build_progress_prompt(state.task),
+                        build_text_progress_prompt(state.task, fresh_elements, state.action_history),
                         trace=trace,
                     )
                     prog_usage = prog.pop("_usage", {})
                     state.llm_call_count += 1
                     state.tokens_used += prog_usage.get("total_tokens", 0)
                     state.estimated_cost_usd += estimate_cost_usd(state.provider, prog_usage.get("prompt_tokens", 0), prog_usage.get("completion_tokens", 0))
+
+                    if not prog.get("confident", False):
+                        progress_png = await state.device.screenshot()
+                        progress_b64 = base64.b64encode(progress_png).decode()
+                        prog = await call_vision_llm(
+                            state.provider,
+                            progress_b64,
+                            build_progress_prompt(state.task),
+                            trace=trace,
+                        )
+                        prog_usage = prog.pop("_usage", {})
+                        state.llm_call_count += 1
+                        state.tokens_used += prog_usage.get("total_tokens", 0)
+                        state.estimated_cost_usd += estimate_cost_usd(state.provider, prog_usage.get("prompt_tokens", 0), prog_usage.get("completion_tokens", 0))
+
                     if prog.get("complete"):
                         state.task_complete = True
                         await state.broadcast({

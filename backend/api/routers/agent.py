@@ -112,18 +112,28 @@ def _make_state(
         )
     serial, device = acquired
 
-    kb = KnowledgeBase(app_name=config.app_name)
-    app_card = _app_cards.get(config.app_name)
-    state = AgentState(
-        session_id=session_id,
-        config=config,
-        device=device,
-        kb=kb,
-        credentials=_credentials,
-        app_card=app_card,
-        nav_graph=_nav_graph,
-        ws_broadcast=ws_manager.broadcast,
-    )
+    try:
+        kb = KnowledgeBase(app_name=config.app_name)
+        app_card = _app_cards.get(config.app_name)
+        state = AgentState(
+            session_id=session_id,
+            config=config,
+            device=device,
+            kb=kb,
+            credentials=_credentials,
+            app_card=app_card,
+            nav_graph=_nav_graph,
+            ws_broadcast=ws_manager.broadcast,
+        )
+    except Exception:
+        # KnowledgeBase() hard-requires a live ChromaDB connection (unlike
+        # Neo4j/Langfuse, which fail soft) — if it's down, this raises before
+        # a state ever exists to release the device. Found live: a ChromaDB
+        # outage left a device permanently marked busy until the server was
+        # restarted, since nothing downstream of this point ever ran to
+        # release it.
+        registry.release(serial)
+        raise
     return state
 
 

@@ -213,3 +213,21 @@ one, and it's a common mix-up.
   **before** `/{session_id}`, or the wildcard swallows them.
 - `git commit` messages here don't use a Co-Authored-By trailer (it breaks
   the Google CLA bot on other repos).
+
+---
+
+## 8. Bugs found and fixed, worth not reintroducing
+
+- (2026-08-28) `type_secret` was risk-tiered `"low"` in `security/risk_policy.py`
+  — auto-executes, no human confirmation — on the reasoning that the LLM never
+  sees the resolved secret value. True, but the *element it gets typed into* is
+  chosen by the LLM reading raw, unsanitized on-screen text
+  (`llm/prompts.py::_elements_txt`), which a malicious or compromised app screen
+  can plant text into. That's a real credential-exfiltration path via prompt
+  injection, not hypothetical: a phishing overlay could steer the LLM onto its
+  own field and get the real credential typed there with zero human visibility.
+  Fixed: bumped to `"medium"` (requires confirmation). Also added
+  `security/redact.py` — filters injection-shaped phrasing out of live screen
+  text and retrieved KB docs before either reaches a prompt, and redacts PII out
+  of KB documentation before it's persisted (a screenshot during Explore can be
+  a real messaging/email app). See README.md's "Security testing" section.

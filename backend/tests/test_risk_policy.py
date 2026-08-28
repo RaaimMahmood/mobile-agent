@@ -29,10 +29,15 @@ def test_plain_text_into_ordinary_field_is_medium():
     assert classify_action(action, elements) == "medium"
 
 
-def test_type_secret_is_low_the_llm_never_sees_the_value():
+def test_type_secret_requires_confirmation_element_choice_is_llm_controlled():
+    # The secret VALUE never reaches the LLM, but WHICH element it gets typed
+    # into does — that choice comes from untrusted on-screen text (see
+    # backend/llm/prompts.py::_elements_txt, embedded into the prompt with no
+    # sanitization). A malicious screen could steer the LLM onto an
+    # attacker-controlled field, so this must not auto-execute at "low".
     elements = [_elem(id=1, password=True)]
     action = {"action": "type_secret", "element_id": 1, "secret_id": "my_login"}
-    assert classify_action(action, elements) == "low"
+    assert classify_action(action, elements) == "medium"
 
 
 def test_tap_on_element_with_dangerous_keyword_is_high():

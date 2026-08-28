@@ -74,10 +74,16 @@ def classify_action(action: dict, elements: list[dict]) -> str:
         return "medium"
 
     if action_type == "type_secret":
-        # The actual secret value is resolved server-side by CredentialManager
-        # and never touches the LLM (see backend/agent/executor.py) — the
-        # *decision* to type into a field carries no more risk than a tap.
-        return "low"
+        # The secret VALUE is resolved server-side and never touches the LLM
+        # (see executor.py) — but the DECISION of which element to type it
+        # into comes straight from the LLM's read of on-screen text, which is
+        # untrusted (backend/llm/prompts.py's _elements_txt embeds it into
+        # the prompt verbatim, no sanitization). A malicious/compromised
+        # screen can plant text aimed at getting the model to pick an
+        # attacker-controlled field — that's a real credential-exfiltration
+        # path, not a hypothetical one. "low" let it auto-execute with zero
+        # human visibility; must confirm like any other risky action.
+        return "medium"
 
     if action_type == "tap" and elem is not None:
         blob = _element_text_blob(elem)

@@ -107,6 +107,61 @@ frontend/
 secrets.example.yaml   template for secrets.yaml (gitignored) — see docs/DEVELOPMENT.md
 ```
 
+## Security testing — real evidence, not aspirational
+
+This agent takes real physical actions on a device, so the stakes for a prompt
+injection are higher than a search/compare tool: on-screen text from a malicious or
+compromised app can try to steer a *real* tap/type action, not just a wrong answer.
+
+```bash
+cd backend && source venv/Scripts/activate
+pytest tests/test_redact.py tests/test_risk_policy.py tests/test_prompts.py -v
+ruff check backend/
+```
+
+**A real vulnerability found and fixed this session:** `classify_action()`
+(`security/risk_policy.py`) classified `type_secret` as `"low"` risk — meaning it
+auto-executed with **zero human confirmation** — on the reasoning that "the secret
+value never reaches the LLM." True, but the *element the secret gets typed into* is
+chosen by the LLM reading raw, unsanitized on-screen text
+(`llm/prompts.py::_elements_txt`). A malicious screen (a phishing overlay, a hijacked
+webview) could plant text aimed at steering that choice onto an attacker-controlled
+field — the real credential would then get typed there with no human ever seeing it
+happen. Fixed: `type_secret` now requires confirmation like any other risky action
+(`test_risk_policy.py::test_type_secret_requires_confirmation_element_choice_is_llm_controlled`).
+
+**Defense in depth added** (`backend/security/redact.py`):
+- `sanitize_screen_text()` filters injection-shaped phrasing ("ignore previous
+  instructions", "use type_secret", etc.) out of live element text/content-desc
+  *and* out of KB docs retrieved back into a prompt — before either reaches the LLM.
+  PII is deliberately **not** stripped here: legitimate element text routinely
+  contains the contact/number the user is trying to interact with, and the agent
+  needs to read it to function.
+- `redact_pii()` strips emails/phone/card numbers from KB documentation *before* it's
+  written to ChromaDB (`knowledge_base/store.py::_build_document`) — a screenshot
+  reflected on during Explore can be a real app (messaging, email) and the
+  documentation-writing LLM call can otherwise echo what it saw into a doc that
+  outlives the session and gets retrieved into *other* sessions' prompts later.
+
+Verified: `test_elements_txt_filters_injection_from_screen_text` and
+`test_deploy_prompt_filters_injection_in_docs_context` construct a poisoned element/KB
+doc and assert the built prompt string never contains the injected instruction.
+
+**Existing self-correction / reliability mechanisms** (not new — verified, not built
+from scratch):
+- `agent/confirmation.py::gate_action` — pauses for human approval on medium+ risk
+  actions, re-checks the screen hasn't changed while waiting (stale-decision guard),
+  stops the whole run on an unattended timeout rather than guessing.
+- `backend/eval/` — `run_benchmark.py` / `run_llm_quality.py` score real deploy-mode
+  runs against benchmark tasks (TSR/CE/KUR metrics, see `docs/COMPARISON.md`).
+
+**Known gap, stated plainly:** `sanitize_screen_text`'s injection patterns are a
+fixed list, not exhaustive — a sufficiently novel phrasing could still get through.
+The confirmation gate (`gate_action`) is the real backstop for anything risk-tiered
+medium+; the gap that matters is specifically an injection that both evades the
+pattern filter *and* targets a `tap`/`text` action the risk policy scores `"low"`
+(an unlabeled, non-hotzone element with no dangerous keyword) — narrow, but real.
+
 ## Documentation
 
 | Doc | Covers |

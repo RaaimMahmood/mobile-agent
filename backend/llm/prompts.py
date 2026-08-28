@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING
 
+from ..security.redact import sanitize_screen_text
+
 if TYPE_CHECKING:
     from ..agent.state import AgentState
     from ..perception.xml_parser import InteractiveElement
@@ -32,9 +34,13 @@ _DEPLOY_SCHEMA = """{
 
 
 def _elements_txt(elements: list) -> str:
+    # text/content_desc come straight off the real screen — a malicious or
+    # compromised app can put arbitrary text there aimed at this prompt, not
+    # the user. resource_id is developer-set (Android build metadata), not
+    # attacker-reachable at runtime, so it's left unfiltered.
     return "\n".join(
-        f"[{e['id']}] {e['class_name']} | text='{e['text']}' "
-        f"| desc='{e['content_desc']}' | res='{e['resource_id']}'"
+        f"[{e['id']}] {e['class_name']} | text='{sanitize_screen_text(e['text'])}' "
+        f"| desc='{sanitize_screen_text(e['content_desc'])}' | res='{e['resource_id']}'"
         for e in elements
     ) or "(no interactive elements detected)"
 
@@ -98,8 +104,11 @@ def build_explore_prompt(state: "AgentState", elements: list, docs_context: str)
         f"{_elements_txt(elements)}\n\n"
         f"AVAILABLE SECRETS (reference by name only with type_secret — you cannot see their values):\n"
         f"{_secrets_txt(state)}\n\n"
+        # docs_context is retrieved from the persistent KB — text an earlier
+        # session's LLM call wrote after looking at a (possibly different
+        # app's) screenshot. Same untrusted-content path as live screen text.
         f"EXISTING KB DOCS FOR VISIBLE ELEMENTS:\n"
-        f"{docs_context or '(none yet)'}\n\n"
+        f"{sanitize_screen_text(docs_context) or '(none yet)'}\n\n"
         f"LAST 5 ACTIONS:\n"
         f"{_history_txt(state.action_history)}\n\n"
         f"Respond ONLY with valid JSON matching this schema:\n{_EXPLORE_SCHEMA}"
@@ -224,7 +233,7 @@ def build_deploy_prompt(state: "AgentState", elements: list, docs_context: str, 
         f"INTERACTIVE ELEMENTS:\n{_elements_txt(elements)}\n\n"
         f"AVAILABLE SECRETS (reference by name only with type_secret — you cannot see their values):\n"
         f"{_secrets_txt(state)}\n\n"
-        f"KNOWLEDGE BASE DOCS:\n{docs_context or '(none — reason from screenshot directly)'}\n\n"
+        f"KNOWLEDGE BASE DOCS:\n{sanitize_screen_text(docs_context) or '(none — reason from screenshot directly)'}\n\n"
         f"ACTION HISTORY {hist_note}:\n{history_lines}\n\n"
         f"Respond ONLY with valid JSON matching this schema:\n{_DEPLOY_SCHEMA}"
     )

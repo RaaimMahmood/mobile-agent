@@ -8,6 +8,8 @@ from typing import Optional
 import chromadb
 from chromadb.config import Settings
 
+from ..security.redact import redact_pii
+
 
 COLLECTION_NAME = "mobile_agent_kb"
 LOCAL_KB_PATH = Path(__file__).parent.parent.parent / "kb_data"
@@ -28,12 +30,20 @@ class ElementDoc:
 
 
 def _build_document(doc: ElementDoc) -> str:
-    """Full text that gets embedded — includes identity + behavior for semantic transfer."""
+    """Full text that gets embedded — includes identity + behavior for semantic transfer.
+
+    `documentation`/`observed_result` are an LLM's free-text summary of what a
+    screenshot showed — during Explore that's a real app (WhatsApp, Gmail, banking
+    apps per SESSION_STATE.md), so a name/number/email visible on screen can end up
+    quoted here. This is persisted to disk (ChromaDB) and later retrieved back into
+    *other* sessions' prompts as docs_context — redact before it's ever written,
+    not just at read time, so nothing sensitive is sitting on disk in the interim.
+    """
     return (
         f"Element: {doc.class_name} | resource_id: {doc.resource_id} | "
-        f"text: '{doc.text}' | content_desc: '{doc.content_desc}' | "
-        f"Documentation: {doc.documentation} "
-        f"Observed result: {doc.observed_result}"
+        f"text: '{redact_pii(doc.text)}' | content_desc: '{redact_pii(doc.content_desc)}' | "
+        f"Documentation: {redact_pii(doc.documentation)} "
+        f"Observed result: {redact_pii(doc.observed_result)}"
     )
 
 
